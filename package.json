@@ -1,0 +1,103 @@
+{
+  "name": "vscode-github-file-puller",
+  "displayName": "GitHub File Puller",
+  "description": "Fetch one or more specific files from a GitHub repository into a target folder in your workspace. Supports private repositories (token auth), conflict strategies, folder structure preservation, and encoding detection.",
+  "version": "0.1.0",
+  "publisher": "your-publisher",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "main": "./out/src/extension.js",
+  "activationEvents": [
+    "onCommand:githubPuller.fetchFiles",
+    "onCommand:githubPuller.setToken",
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "githubPuller.fetchFiles",
+        "title": "GitHub: Fetch Selected Files to Workspace"
+      },
+      {
+        "command": "githubPuller.setToken",
+        "title": "GitHub: Set Token (Secret Storage)"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "GitHub File Puller",
+      "properties": {
+        "githubPuller.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a status bar button to open the puller panel."
+        },
+        "githubPuller.defaultTargetDir": {
+          "type": "string",
+          "default": "",
+          "description": "Default target directory (relative to workspace). Leave empty to choose during operation."
+        },
+        "githubPuller.conflictResolution": {
+          "type": "string",
+          "enum": ["overwrite", "skip", "rename"],
+          "default": "rename",
+          "description": "File conflict strategy: overwrite, skip, or rename."
+        },
+        "githubPuller.preserveStructure": {
+          "type": "boolean",
+          "default": true,
+          "description": "Preserve the repository folder structure in the workspace."
+        },
+        "githubPuller.baseUrl": {
+          "type": "string",
+          "default": "https://github.com",
+          "description": "Base URL for GitHub or GitHub Enterprise (e.g., https://github.example.com)."
+        },
+        "githubPuller.apiBaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Optional API base URL (e.g., https://github.example.com/api/v3). If empty: uses https://api.github.com when baseUrl is https://github.com; otherwise defaults to baseUrl + /api/v3."
+        },
+        "githubPuller.defaultRef": {
+          "type": "string",
+          "default": "main",
+          "description": "Default branch or tag (ref)."
+        },
+        "githubPuller.token": {
+          "type": "string",
+          "default": "",
+          "description": "Fallback token (not recommended; stored in plaintext). Prefer the \"GitHub: Set Token (Secret Storage)\" command."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "typecheck": "tsc -p . --noEmit",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTests.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.10",
+    "@types/node-fetch": "^2.6.4",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.3",
+    "@types/mocha": "^10.0.1",
+    "mocha": "^10.2.0",
+    "ts-node": "^10.9.2",
+    "glob": "^10.3.10",
+    "@types/glob": "^8.1.0"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.6.3",
+    "istextorbinary": "^6.0.0",
+    "chardet": "^2.0.0",
+    "node-fetch": "^2.7.0"
+  }
+}
