@@ -1,0 +1,15 @@
+.git/**
+.github/**
+.vscode/**
+**/*.map
+**/*.tsbuildinfo
+npm-debug.log
+yarn.lock
+pnpm-lock.yaml
+tsconfig.json
+test/**
+**/*.test.*
+**/__tests__/**
+**/.DS_Store
+**/.env*
+
