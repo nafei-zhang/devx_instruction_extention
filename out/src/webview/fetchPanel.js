@@ -475,6 +475,7 @@ class FetchPanel {
         preserve.checked = !!msg.preserve;
         conflict.value = msg.conflict || 'rename';
         if (msg.defaultTargetDir) targetDir.value = msg.defaultTargetDir;
+        if (!repoUrl.value) repoUrl.value = 'https://github.com/nafei-zhang/devx_instruction_extention';
       } else if (msg.type === 'loading') {
         status.textContent = msg.text || 'Loading…';
       } else if (msg.type === 'treeLoaded') {
