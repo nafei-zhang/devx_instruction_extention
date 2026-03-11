@@ -45,7 +45,12 @@
         "githubPuller.defaultTargetDir": {
           "type": "string",
           "default": "",
-          "description": "Default target directory (relative to workspace). Leave empty to choose during operation."
+          "description": "Legacy single default target directory. Automatically synced to the first entry in githubPuller.targetDirs."
+        },
+        "githubPuller.targetDirs": {
+          "type": "string",
+          "default": "",
+          "description": "Comma-separated absolute target directories. Example: /path/a,/path/b"
         },
         "githubPuller.conflictResolution": {
           "type": "string",

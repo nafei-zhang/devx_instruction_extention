@@ -38,10 +38,24 @@ const vscode = __importStar(require("vscode"));
 const github_1 = require("../github");
 const fs_1 = require("../utils/fs");
 const secrets_1 = require("../secrets");
+const targetDirs_1 = require("../utils/targetDirs");
 class FetchPanel {
     constructor(ctx) {
         this.ctx = ctx;
         this.panel = null;
+        this.cfgWatcher = null;
+    }
+    getConfigWriter() {
+        const cfg = vscode.workspace.getConfiguration();
+        const target = vscode.workspace.workspaceFolders?.length ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+        return {
+            get(key) {
+                return cfg.get(key);
+            },
+            update(key, value) {
+                return cfg.update(key, value, target);
+            }
+        };
     }
     show() {
         if (this.panel) {
@@ -53,20 +67,32 @@ class FetchPanel {
             retainContextWhenHidden: true
         });
         this.panel.webview.html = this.renderHtml(this.panel.webview);
-        this.panel.onDidDispose(() => (this.panel = null));
+        this.panel.onDidDispose(() => {
+            this.panel = null;
+            this.cfgWatcher?.dispose();
+            this.cfgWatcher = null;
+        });
         this.panel.webview.onDidReceiveMessage((msg) => this.handleMessage(msg));
-        // Push defaults
+        this.pushDefaults();
+        this.cfgWatcher = vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('githubPuller.targetDirs') || e.affectsConfiguration('githubPuller.defaultTargetDir')) {
+                this.pushDefaults();
+            }
+        });
+    }
+    post(message) {
+        this.panel?.webview.postMessage(message);
+    }
+    pushDefaults() {
         const cfg = vscode.workspace.getConfiguration();
+        const configured = (0, targetDirs_1.readTargetDirsFromConfig)(cfg);
         this.post({
             type: 'defaults',
             defaultRef: cfg.get('githubPuller.defaultRef') || 'main',
             preserve: cfg.get('githubPuller.preserveStructure') ?? true,
             conflict: cfg.get('githubPuller.conflictResolution') || 'rename',
-            defaultTargetDir: cfg.get('githubPuller.defaultTargetDir') || ''
+            defaultTargetDirs: configured
         });
-    }
-    post(message) {
-        this.panel?.webview.postMessage(message);
     }
     async handleMessage(msg) {
         try {
@@ -81,7 +107,28 @@ class FetchPanel {
                         openLabel: 'Select Folder'
                     });
                     const p = result?.[0]?.fsPath;
-                    this.post({ type: 'targetDir', path: p || '' });
+                    if (!p)
+                        break;
+                    const writableCfg = this.getConfigWriter();
+                    const currentInput = msg.currentValue || (0, targetDirs_1.readTargetDirsFromConfig)(writableCfg);
+                    const appended = (0, targetDirs_1.appendTargetDir)(currentInput, p, { requireAbsolute: true, requireExists: true });
+                    if (appended.issues.length > 0) {
+                        throw new Error(`Invalid target path: ${appended.issues[0].path} (${appended.issues[0].reason})`);
+                    }
+                    const serialized = (0, targetDirs_1.serializeTargetDirs)(appended.normalized);
+                    await (0, targetDirs_1.writeTargetDirsToConfig)(writableCfg, serialized);
+                    this.post({ type: 'targetDir', path: serialized });
+                    break;
+                }
+                case 'syncTargetDirs': {
+                    const writableCfg = this.getConfigWriter();
+                    const parsed = (0, targetDirs_1.parseTargetDirs)(msg.value || '', { requireAbsolute: true, requireExists: false });
+                    if (parsed.issues.length > 0) {
+                        throw new Error(parsed.issues.map(i => `${i.path || '<empty>'}: ${i.reason}`).join('; '));
+                    }
+                    const serialized = (0, targetDirs_1.serializeTargetDirs)(parsed.normalized);
+                    await (0, targetDirs_1.writeTargetDirsToConfig)(writableCfg, serialized);
+                    this.post({ type: 'targetDirsSynced', value: serialized });
                     break;
                 }
                 case 'loadTree': {
@@ -106,9 +153,13 @@ class FetchPanel {
                     const baseUrl = cfg.get('githubPuller.baseUrl') || 'https://github.com';
                     const apiBaseOverride = cfg.get('githubPuller.apiBaseUrl') || '';
                     const apiBase = (0, github_1.deriveApiBase)(baseUrl, apiBaseOverride);
-                    const targetDir = msg.targetDir;
-                    if (!targetDir)
+                    const parsedTargetDirs = (0, targetDirs_1.parseTargetDirs)(msg.targetDir || '', { requireAbsolute: true, requireExists: true });
+                    if (parsedTargetDirs.issues.length > 0) {
+                        throw new Error(`Invalid target directory: ${parsedTargetDirs.issues[0].path} (${parsedTargetDirs.issues[0].reason})`);
+                    }
+                    if (parsedTargetDirs.normalized.length === 0)
                         throw new Error('Please select target directory');
+                    const targetDirs = parsedTargetDirs.normalized;
                     const preserve = !!msg.preserve;
                     const conflict = msg.conflict || 'rename';
                     const selected = Array.isArray(msg.selected) ? msg.selected : [];
@@ -120,26 +171,28 @@ class FetchPanel {
                         cancellable: false
                     }, async (progress) => {
                         let done = 0;
-                        const total = selected.length;
+                        const total = selected.length * targetDirs.length;
                         const results = [];
-                        for (const relPath of selected) {
-                            progress.report({ message: `${relPath}`, increment: (1 / total) * 100 });
-                            try {
-                                const file = await (0, github_1.fetchFileContent)(info, relPath, token || undefined, apiBase);
-                                const dst = (0, fs_1.resolveTargetPath)(targetDir, relPath, preserve);
-                                const w = (0, fs_1.writeFileSmart)(dst, file.content, conflict);
-                                if (w.wrote) {
-                                    results.push({ ok: true, path: w.path });
+                        for (const targetDir of targetDirs) {
+                            for (const relPath of selected) {
+                                progress.report({ message: `${targetDir} ← ${relPath}`, increment: (1 / total) * 100 });
+                                try {
+                                    const file = await (0, github_1.fetchFileContent)(info, relPath, token || undefined, apiBase);
+                                    const dst = (0, fs_1.resolveTargetPath)(targetDir, relPath, preserve);
+                                    const w = (0, fs_1.writeFileSmart)(dst, file.content, conflict);
+                                    if (w.wrote) {
+                                        results.push({ ok: true, path: w.path });
+                                    }
+                                    else {
+                                        results.push({ ok: false, path: dst, message: 'Not written due to conflict policy (skip/rename failed)' });
+                                    }
                                 }
-                                else {
-                                    results.push({ ok: false, path: dst, message: 'Not written due to conflict policy (skip/rename failed)' });
+                                catch (e) {
+                                    results.push({ ok: false, path: `${targetDir}:${relPath}`, message: e?.message || String(e) });
                                 }
-                            }
-                            catch (e) {
-                                results.push({ ok: false, path: relPath, message: e?.message || String(e) });
-                            }
-                            finally {
-                                done++;
+                                finally {
+                                    done++;
+                                }
                             }
                         }
                         const okCnt = results.filter(r => r.ok).length;
@@ -187,27 +240,28 @@ class FetchPanel {
     .files-header input[type="text"] { height: 28px; line-height: 28px; padding: 0 10px; }
     .chips { font-size: 12px; opacity: .85; }
     .list { height: 300px; overflow: auto; padding: 6px 8px; }
-    .item { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-radius: 4px; height: 26px; }
+    .item { display: grid; grid-template-columns: 14px 18px minmax(0, 1fr); align-items: center; column-gap: 8px; padding: 2px 4px; border-radius: 4px; height: 26px; }
     .item:hover { background: var(--vscode-editor-selectionHighlightBackground, rgba(90, 93, 94, 0.2)); }
-    details > summary { height: 26px; border-radius: 4px; }
+    details > summary { height: 26px; border-radius: 4px; display: grid; grid-template-columns: 14px 18px minmax(0, 1fr); align-items: center; column-gap: 8px; }
     details > summary:hover { background: var(--vscode-editor-selectionHighlightBackground, rgba(90, 93, 94, 0.2)); }
     .path { font-family: var(--vscode-editor-font-family); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dirname { font-weight: 600; }
-    .file .path::before { content: '•'; display: inline-block; width: 10px; margin-right: 6px; color: var(--vscode-descriptionForeground); }
-    details.dir > div { margin-left: 18px; padding-left: 10px; border-left: 1px dashed var(--vscode-panel-border); }
-    .item input[type="checkbox"], summary input[type="checkbox"] { margin-right: 6px; }
+    details.dir > div { margin-left: 24px; padding-left: 0; border-left: 1px dashed var(--vscode-panel-border); }
+    .item input[type="checkbox"], summary input[type="checkbox"] { margin: 0; justify-self: center; }
     summary .path, .item .path { min-width: 0; }
-    summary input:checked + .path, .item input:checked + .path { color: var(--vscode-textLink-activeForeground, var(--vscode-foreground)); }
+    summary input:checked ~ .path, .item input:checked ~ .path { color: var(--vscode-textLink-activeForeground, var(--vscode-foreground)); }
     .options { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
     .options label { display: inline-flex; align-items: center; gap: 6px; margin: 0; white-space: nowrap; }
     .options select { height: 28px; line-height: 28px; padding: 0 8px; }
     .footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; }
     .status { font-size: 12px; opacity: .8; }
-    details > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 4px; }
+    details > summary { list-style: none; cursor: pointer; padding: 4px; }
     details > summary::-webkit-details-marker { display: none; }
-    .twisty { display: inline-block; width: 10px; height: 10px; transform: rotate(0deg); transition: transform .12s ease; border-right: 2px solid var(--vscode-foreground); border-bottom: 2px solid var(--vscode-foreground); transform: rotate(-45deg); margin-right: 4px; }
+    .twisty { display: inline-block; width: 10px; height: 10px; justify-self: center; transition: transform .12s ease; border-right: 2px solid var(--vscode-foreground); border-bottom: 2px solid var(--vscode-foreground); }
+    details:not([open]) > summary .twisty { transform: translateX(-3px) rotate(-45deg); }
     details[open] > summary .twisty { transform: rotate(45deg); }
-    .dir { margin-left: 12px; }
+    .bullet { width: 10px; height: 10px; border-radius: 50%; justify-self: center; background: var(--vscode-descriptionForeground); opacity: .9; }
+    .dir { margin-left: 0; }
     .row-inline input[type="text"] { height: 28px; line-height: 28px; padding: 0 10px; }
   </style>
 </head>
@@ -243,8 +297,8 @@ class FetchPanel {
       </div>
       <div class="row-inline">
         <div>
-          <label>Target Directory</label>
-          <input id="targetDir" type="text" class="path" placeholder="Choose or enter an absolute path">
+          <label>Target Directory (comma separated)</label>
+          <input id="targetDir" type="text" class="path" placeholder="Choose or enter absolute paths, separated by commas">
         </div>
         <button class="btn btn-secondary" id="pickDir">Browse</button>
       </div>
@@ -283,7 +337,20 @@ class FetchPanel {
     const fetchBtn = document.getElementById('fetch');
     const status = document.getElementById('status');
 
-    const state = { files: [], selected: new Set(), tree: null, openDirs: new Set() };
+    const state = { files: [], selected: new Set(), tree: null, openDirs: new Set(), syncTimer: null };
+    function splitDirs(value) {
+      return (value || '').split(',').map(v => v.trim()).filter(Boolean);
+    }
+    function uniqueDirs(value) {
+      const arr = splitDirs(value);
+      return Array.from(new Set(arr)).join(',');
+    }
+    function scheduleSyncTargetDirs() {
+      if (state.syncTimer) clearTimeout(state.syncTimer);
+      state.syncTimer = setTimeout(() => {
+        vscode.postMessage({ type: 'syncTargetDirs', value: targetDir.value });
+      }, 250);
+    }
     function captureOpenDirs() {
       const arr = Array.from(fileList.querySelectorAll('details.dir[open]'));
       const s = new Set();
@@ -334,7 +401,7 @@ class FetchPanel {
       counts.textContent = state.selected.size + '/' + state.files.length;
     }
     function updateActions() {
-      fetchBtn.disabled = state.selected.size === 0 || !targetDir.value;
+      fetchBtn.disabled = state.selected.size === 0 || splitDirs(targetDir.value).length === 0;
       selectAllBtn.disabled = state.files.length === 0;
       clearAllBtn.disabled = state.selected.size === 0;
       expandAllBtn.disabled = state.files.length === 0;
@@ -355,6 +422,8 @@ class FetchPanel {
         if (node.t === 'file') {
           const row = document.createElement('div');
           row.className = 'item file';
+          const bullet = document.createElement('span');
+          bullet.className = 'bullet';
           const cb = document.createElement('input');
           cb.type = 'checkbox';
           cb.checked = state.selected.has(node.path);
@@ -365,6 +434,7 @@ class FetchPanel {
           const span = document.createElement('span');
           span.textContent = node.path;
           span.className = 'path';
+          row.appendChild(bullet);
           row.appendChild(cb);
           row.appendChild(span);
           return row;
@@ -451,9 +521,16 @@ class FetchPanel {
       vscode.postMessage({ type: 'loadTree', repoUrl: repoUrl.value, ref: ref.value });
     });
     pickDir.addEventListener('click', () => {
-      vscode.postMessage({ type: 'selectTargetDir' });
+      vscode.postMessage({ type: 'selectTargetDir', currentValue: targetDir.value });
     });
     targetDir.addEventListener('input', () => {
+      targetDir.value = uniqueDirs(targetDir.value);
+      scheduleSyncTargetDirs();
+      updateActions();
+    });
+    targetDir.addEventListener('blur', () => {
+      targetDir.value = uniqueDirs(targetDir.value);
+      vscode.postMessage({ type: 'syncTargetDirs', value: targetDir.value });
       updateActions();
     });
     fetchBtn.addEventListener('click', () => {
@@ -474,8 +551,9 @@ class FetchPanel {
         ref.value = msg.defaultRef || '';
         preserve.checked = !!msg.preserve;
         conflict.value = msg.conflict || 'rename';
-        if (msg.defaultTargetDir) targetDir.value = msg.defaultTargetDir;
+        if (typeof msg.defaultTargetDirs === 'string') targetDir.value = msg.defaultTargetDirs;
         if (!repoUrl.value) repoUrl.value = 'https://github.com/nafei-zhang/devx_instruction_extention';
+        updateActions();
       } else if (msg.type === 'loading') {
         status.textContent = msg.text || 'Loading…';
       } else if (msg.type === 'treeLoaded') {
@@ -486,6 +564,11 @@ class FetchPanel {
         renderFiles();
       } else if (msg.type === 'targetDir') {
         targetDir.value = msg.path || '';
+        status.textContent = 'Target directories updated';
+        updateActions();
+      } else if (msg.type === 'targetDirsSynced') {
+        targetDir.value = msg.value || '';
+        status.textContent = 'Target directories synced';
         updateActions();
       } else if (msg.type === 'fetchDone') {
         status.textContent = 'Fetch complete';
