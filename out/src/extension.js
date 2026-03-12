@@ -45,6 +45,19 @@ const fs_1 = require("./utils/fs");
 function activate(context) {
     const output = vscode.window.createOutputChannel('GitHub Puller Sync');
     context.subscriptions.push(output);
+    const fallbackKey = (key) => `githubPuller.fallback.${key}`;
+    const getSetting = (key, defaultValue) => {
+        const cfgValue = vscode.workspace.getConfiguration().get(key);
+        if (cfgValue !== undefined)
+            return cfgValue;
+        const workspaceValue = context.workspaceState.get(fallbackKey(key));
+        if (workspaceValue !== undefined)
+            return workspaceValue;
+        const globalValue = context.globalState.get(fallbackKey(key));
+        if (globalValue !== undefined)
+            return globalValue;
+        return defaultValue;
+    };
     const setTokenCommand = async () => {
         const token = await vscode.window.showInputBox({
             title: 'Enter GitHub Token (securely stored in Secret Storage)',
@@ -75,11 +88,10 @@ function activate(context) {
         panel.show();
     };
     const runAutoSync = async () => {
-        const cfg = vscode.workspace.getConfiguration();
-        const repoUrl = (cfg.get('githubPuller.syncRepoUrl') || '').trim();
-        const ref = (cfg.get('githubPuller.syncRef') || cfg.get('githubPuller.defaultRef') || 'main').trim();
-        const paths = (0, sync_1.splitSyncPaths)(cfg.get('githubPuller.syncPaths') || '');
-        const token = (0, sync_1.pickToken)(await (0, secrets_1.getSecretToken)(context.secrets), cfg.get('githubPuller.token') || '');
+        const repoUrl = (getSetting('githubPuller.syncRepoUrl', '') || '').trim();
+        const ref = (getSetting('githubPuller.syncRef', getSetting('githubPuller.defaultRef', 'main') || 'main') || 'main').trim();
+        const paths = (0, sync_1.splitSyncPaths)(getSetting('githubPuller.syncPaths', '') || '');
+        const token = (0, sync_1.pickToken)(await (0, secrets_1.getSecretToken)(context.secrets), getSetting('githubPuller.token', '') || '');
         if (!token || !repoUrl || paths.length === 0) {
             setSyncVisual(false, 'Configure Puller Sync');
             openConfigPanel();
@@ -98,7 +110,7 @@ function activate(context) {
         }
         setSyncVisual(true, 'Sync in progress');
         try {
-            const configuredTargets = (0, targetDirs_1.splitTargetDirs)(cfg.get('githubPuller.targetDirs') || cfg.get('githubPuller.defaultTargetDir') || '');
+            const configuredTargets = (0, targetDirs_1.splitTargetDirs)(getSetting('githubPuller.targetDirs', '') || getSetting('githubPuller.defaultTargetDir', '') || '');
             const workspaceRoots = (vscode.workspace.workspaceFolders || []).map(f => f.uri.fsPath);
             const targetResolution = (0, sync_1.resolveSyncTargets)(configuredTargets, workspaceRoots);
             const targetRoots = targetResolution.targets;
@@ -127,8 +139,8 @@ function activate(context) {
                     throw e;
                 }
             }
-            const baseUrl = cfg.get('githubPuller.baseUrl') || 'https://github.com';
-            const apiBase = (0, github_1.deriveApiBase)(baseUrl, cfg.get('githubPuller.apiBaseUrl') || '');
+            const baseUrl = getSetting('githubPuller.baseUrl', 'https://github.com') || 'https://github.com';
+            const apiBase = (0, github_1.deriveApiBase)(baseUrl, getSetting('githubPuller.apiBaseUrl', '') || '');
             const repo = (0, github_1.parseRepoUrl)(repoUrl, ref);
             output.appendLine(`[sync] repo=${repo.owner}/${repo.repo} ref=${repo.ref}`);
             output.appendLine(`[sync] targetRoots=${targetRoots.join(',')}`);
@@ -141,8 +153,8 @@ function activate(context) {
             if (expanded.issues.length > 0) {
                 output.appendLine(`[sync] unmatched paths=${expanded.issues.map(i => i.value).join(',')}`);
             }
-            const preserve = cfg.get('githubPuller.preserveStructure') ?? true;
-            const conflict = cfg.get('githubPuller.conflictResolution') || 'rename';
+            const preserve = getSetting('githubPuller.preserveStructure', true) ?? true;
+            const conflict = getSetting('githubPuller.conflictResolution', 'rename') || 'rename';
             let ok = 0;
             let fail = 0;
             await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Puller Sync', cancellable: false }, async (progress) => {
@@ -189,7 +201,7 @@ function activate(context) {
         }
     };
     const updateStatusBarVisibility = () => {
-        const show = vscode.workspace.getConfiguration().get('githubPuller.showStatusBar') ?? true;
+        const show = getSetting('githubPuller.showStatusBar', true) ?? true;
         if (!show) {
             statusItem.hide();
             return;

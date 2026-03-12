@@ -45,15 +45,59 @@ class FetchPanel {
         this.panel = null;
         this.cfgWatcher = null;
     }
+    fallbackKey(key) {
+        return `githubPuller.fallback.${key}`;
+    }
+    readFallback(key) {
+        const fallback = this.fallbackKey(key);
+        const workspaceValue = this.ctx.workspaceState.get(fallback);
+        if (workspaceValue !== undefined)
+            return workspaceValue;
+        return this.ctx.globalState.get(fallback);
+    }
+    async writeFallback(key, value, preferWorkspace) {
+        const fallback = this.fallbackKey(key);
+        if (preferWorkspace) {
+            await this.ctx.workspaceState.update(fallback, value);
+            return;
+        }
+        await this.ctx.globalState.update(fallback, value);
+    }
     getConfigWriter() {
         const cfg = vscode.workspace.getConfiguration();
-        const target = vscode.workspace.workspaceFolders?.length ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+        const panel = this;
+        const preferWorkspace = !!vscode.workspace.workspaceFolders?.length;
+        const isNotRegisteredError = (error) => {
+            const message = (error?.message || String(error)).toLowerCase();
+            return message.includes('not a registered configuration');
+        };
         return {
             get(key) {
-                return cfg.get(key);
+                const value = cfg.get(key);
+                if (value !== undefined)
+                    return value;
+                return panel.readFallback(key);
             },
-            update(key, value) {
-                return cfg.update(key, value, target);
+            async update(key, value) {
+                if (preferWorkspace) {
+                    try {
+                        await cfg.update(key, value, vscode.ConfigurationTarget.Workspace);
+                        return;
+                    }
+                    catch (error) {
+                        if (!isNotRegisteredError(error))
+                            throw error;
+                    }
+                }
+                try {
+                    await cfg.update(key, value, vscode.ConfigurationTarget.Global);
+                    return;
+                }
+                catch (error) {
+                    if (!isNotRegisteredError(error))
+                        throw error;
+                }
+                await panel.writeFallback(key, value, preferWorkspace);
             }
         };
     }
@@ -84,7 +128,7 @@ class FetchPanel {
         this.panel?.webview.postMessage(message);
     }
     pushDefaults() {
-        const cfg = vscode.workspace.getConfiguration();
+        const cfg = this.getConfigWriter();
         const configured = (0, targetDirs_1.readTargetDirsFromConfig)(cfg);
         this.post({
             type: 'defaults',
@@ -155,8 +199,6 @@ class FetchPanel {
                     if (parsedTargetDirs.issues.length > 0) {
                         throw new Error(`Invalid target directory: ${parsedTargetDirs.issues[0].path} (${parsedTargetDirs.issues[0].reason})`);
                     }
-                    if (parsedTargetDirs.normalized.length === 0)
-                        throw new Error('Please select target directory for sync');
                     const selected = Array.isArray(msg.selected) ? msg.selected : [];
                     const normalizedSelected = Array.from(new Set(selected.map(s => s.trim()).filter(Boolean)));
                     if (normalizedSelected.length === 0)

@@ -2,7 +2,7 @@
   "name": "vscode-github-file-puller",
   "displayName": "GitHub File Puller",
   "description": "Fetch one or more specific files from a GitHub repository into a target folder in your workspace. Supports private repositories (token auth), conflict strategies, folder structure preservation, and encoding detection.",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "publisher": "your-publisher",
   "repository": {
     "type": "git",

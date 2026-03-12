@@ -83,7 +83,7 @@
       </div>
       <div class="row-inline">
         <div>
-          <label>Target Directory (comma separated)</label>
+          <label>Target Directory (optional, comma separated)</label>
           <input id="targetDir" type="text" class="path" placeholder="Choose or enter absolute paths, separated by commas">
         </div>
         <button class="btn btn-secondary" id="pickDir">Browse</button>
@@ -188,7 +188,7 @@
       counts.textContent = state.selected.size + '/' + state.files.length;
     }
     function updateActions() {
-      fetchBtn.disabled = state.selected.size === 0 || splitDirs(targetDir.value).length === 0 || !(repoUrl.value || '').trim();
+      fetchBtn.disabled = state.selected.size === 0 || !(repoUrl.value || '').trim();
       selectAllBtn.disabled = state.files.length === 0;
       clearAllBtn.disabled = state.selected.size === 0;
       expandAllBtn.disabled = state.files.length === 0;
