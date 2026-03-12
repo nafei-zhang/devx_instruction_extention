@@ -48,6 +48,19 @@ export interface WriteResult {
   binary?: boolean;
 }
 
+export type GithubDirPrepareStatus = 'exists' | 'created';
+
+export interface GithubDirPrepareResult {
+  targetRoot: string;
+  githubDir: string;
+  status: GithubDirPrepareStatus;
+}
+
+export function resolveGithubSyncBase(targetRoot: string): string {
+  const root = path.resolve(targetRoot);
+  return path.basename(root) === '.github' ? root : path.join(root, '.github');
+}
+
 export function detectAndNormalizeEncoding(buf: Buffer): { text: string | null; encoding?: string; binary: boolean } {
   // Quick binary check
   const maybeBinary = isBinary(null, buf);
@@ -80,4 +93,36 @@ export function writeFileSmart(target: string, content: Buffer, policy: Conflict
     }
   fs.writeFileSync(finalPath, text, { encoding: 'utf8' });
   return { wrote: true, path: finalPath, encoding, binary: false };
+}
+
+export async function prepareGithubDir(targetRoot: string): Promise<GithubDirPrepareResult> {
+  const root = path.resolve(targetRoot);
+  const githubDir = resolveGithubSyncBase(root);
+  try {
+    const stat = await fs.promises.stat(githubDir);
+    if (!stat.isDirectory()) {
+      throw new Error(`Path exists but is not a directory: ${githubDir}`);
+    }
+    return { targetRoot: root, githubDir, status: 'exists' };
+  } catch (error: any) {
+    if (error?.code !== 'ENOENT') {
+      throw new Error(`Failed to inspect .github directory at ${githubDir}: ${error?.message || String(error)}`);
+    }
+  }
+
+  try {
+    await fs.promises.mkdir(githubDir, { recursive: true });
+  } catch (error: any) {
+    throw new Error(`Failed to create .github directory at ${githubDir}: ${error?.message || String(error)}`);
+  }
+
+  try {
+    const stat = await fs.promises.stat(githubDir);
+    if (!stat.isDirectory()) {
+      throw new Error('Path is not a directory after creation');
+    }
+    return { targetRoot: root, githubDir, status: 'created' };
+  } catch (error: any) {
+    throw new Error(`Created .github but verification failed at ${githubDir}: ${error?.message || String(error)}`);
+  }
 }

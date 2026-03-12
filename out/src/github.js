@@ -62,7 +62,8 @@ async function fetchRepoTreeWithApi(info, token, apiBaseUrl) {
     // Resolve branch -> commit sha
     const headers = {
         'Accept': 'application/vnd.github+json',
-        'User-Agent': 'vscode-github-file-puller'
+        'User-Agent': 'vscode-github-file-puller',
+        'X-GitHub-Api-Version': '2022-11-28'
     };
     if (token)
         headers['Authorization'] = `token ${token}`;
@@ -80,8 +81,7 @@ async function fetchRepoTreeWithApi(info, token, apiBaseUrl) {
         }
     }
     if (!branchResp.ok) {
-        const text = await branchResp.text();
-        throw new Error(`Failed to fetch branch info: ${branchResp.status} ${text}`);
+        throw new Error(await buildGitHubError('Failed to fetch branch info', branchResp, !!token));
     }
     const branchData = await branchResp.json();
     const sha = branchData?.commit?.sha;
@@ -92,8 +92,7 @@ async function fetchRepoTreeWithApi(info, token, apiBaseUrl) {
 async function fetchTreeBySha(info, sha, headers, base) {
     const treeResp = await (0, node_fetch_1.default)(`${base}/repos/${info.owner}/${info.repo}/git/trees/${sha}?recursive=1`, { headers });
     if (!treeResp.ok) {
-        const text = await treeResp.text();
-        throw new Error(`Failed to fetch repository tree: ${treeResp.status} ${text}`);
+        throw new Error(await buildGitHubError('Failed to fetch repository tree', treeResp, !!headers.Authorization));
     }
     const json = await treeResp.json();
     const tree = (json.tree || []);
@@ -107,7 +106,8 @@ async function fetchTreeBySha(info, sha, headers, base) {
 async function fetchFileContent(info, filePath, token, apiBaseUrl) {
     const headers = {
         'Accept': 'application/vnd.github+json',
-        'User-Agent': 'vscode-github-file-puller'
+        'User-Agent': 'vscode-github-file-puller',
+        'X-GitHub-Api-Version': '2022-11-28'
     };
     if (token)
         headers['Authorization'] = `token ${token}`;
@@ -115,8 +115,7 @@ async function fetchFileContent(info, filePath, token, apiBaseUrl) {
     const url = `${base}/repos/${info.owner}/${info.repo}/contents/${encodeURIComponent(filePath)}?ref=${encodeURIComponent(info.ref)}`;
     const resp = await (0, node_fetch_1.default)(url, { headers });
     if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(`Failed to download ${filePath}: ${resp.status} ${text}`);
+        throw new Error(await buildGitHubError(`Failed to download ${filePath}`, resp, !!token));
     }
     const data = await resp.json();
     if (Array.isArray(data)) {
@@ -130,12 +129,28 @@ async function fetchFileContent(info, filePath, token, apiBaseUrl) {
     if (data.download_url) {
         const raw = await (0, node_fetch_1.default)(data.download_url, { headers });
         if (!raw.ok) {
-            const text = await raw.text();
-            throw new Error(`Failed to download ${filePath}: ${raw.status} ${text}`);
+            throw new Error(await buildGitHubError(`Failed to download ${filePath}`, raw, !!token));
         }
         const buf = Buffer.from(await raw.arrayBuffer());
         return { path: filePath, content: buf };
     }
     throw new Error(`Unable to parse content of ${filePath}`);
+}
+async function buildGitHubError(prefix, resp, hasToken) {
+    const text = await resp.text();
+    const status = resp.status;
+    const normalized = text.toLowerCase();
+    const isRateLimited = status === 403 && (normalized.includes('rate limit') || resp.headers.get('x-ratelimit-remaining') === '0');
+    if (isRateLimited) {
+        const resetUnix = Number(resp.headers.get('x-ratelimit-reset') || '');
+        const resetText = Number.isFinite(resetUnix) && resetUnix > 0
+            ? ` Rate limit resets at ${new Date(resetUnix * 1000).toLocaleString()}.`
+            : '';
+        const tokenTip = hasToken
+            ? ' Current token may be missing scope, invalid, or exhausted.'
+            : ' Configure token via Ctrl+P -> "GitHub: Puller Configure Token" for higher limit.';
+        return `${prefix}: GitHub API rate limit exceeded.${tokenTip}${resetText}`;
+    }
+    return `${prefix}: ${status} ${text}`;
 }
 //# sourceMappingURL=github.js.map

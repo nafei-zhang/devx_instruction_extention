@@ -37,8 +37,10 @@ exports.resolveTargetPath = resolveTargetPath;
 exports.ensureDirExists = ensureDirExists;
 exports.fileExists = fileExists;
 exports.applyConflictPolicy = applyConflictPolicy;
+exports.resolveGithubSyncBase = resolveGithubSyncBase;
 exports.detectAndNormalizeEncoding = detectAndNormalizeEncoding;
 exports.writeFileSmart = writeFileSmart;
+exports.prepareGithubDir = prepareGithubDir;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const chardet = __importStar(require("chardet"));
@@ -79,6 +81,10 @@ function applyConflictPolicy(target, policy) {
     }
     return null;
 }
+function resolveGithubSyncBase(targetRoot) {
+    const root = path.resolve(targetRoot);
+    return path.basename(root) === '.github' ? root : path.join(root, '.github');
+}
 function detectAndNormalizeEncoding(buf) {
     // Quick binary check
     const maybeBinary = (0, istextorbinary_1.isBinary)(null, buf);
@@ -113,5 +119,37 @@ function writeFileSmart(target, content, policy) {
     }
     fs.writeFileSync(finalPath, text, { encoding: 'utf8' });
     return { wrote: true, path: finalPath, encoding, binary: false };
+}
+async function prepareGithubDir(targetRoot) {
+    const root = path.resolve(targetRoot);
+    const githubDir = resolveGithubSyncBase(root);
+    try {
+        const stat = await fs.promises.stat(githubDir);
+        if (!stat.isDirectory()) {
+            throw new Error(`Path exists but is not a directory: ${githubDir}`);
+        }
+        return { targetRoot: root, githubDir, status: 'exists' };
+    }
+    catch (error) {
+        if (error?.code !== 'ENOENT') {
+            throw new Error(`Failed to inspect .github directory at ${githubDir}: ${error?.message || String(error)}`);
+        }
+    }
+    try {
+        await fs.promises.mkdir(githubDir, { recursive: true });
+    }
+    catch (error) {
+        throw new Error(`Failed to create .github directory at ${githubDir}: ${error?.message || String(error)}`);
+    }
+    try {
+        const stat = await fs.promises.stat(githubDir);
+        if (!stat.isDirectory()) {
+            throw new Error('Path is not a directory after creation');
+        }
+        return { targetRoot: root, githubDir, status: 'created' };
+    }
+    catch (error) {
+        throw new Error(`Created .github but verification failed at ${githubDir}: ${error?.message || String(error)}`);
+    }
 }
 //# sourceMappingURL=fs.js.map

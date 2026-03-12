@@ -19,6 +19,8 @@
   "license": "MIT",
   "activationEvents": [
     "onCommand:githubPuller.fetchFiles",
+    "onCommand:githubPuller.runAutoSync",
+    "onCommand:githubPuller.configureToken",
     "onCommand:githubPuller.setToken",
     "onStartupFinished"
   ],
@@ -26,11 +28,19 @@
     "commands": [
       {
         "command": "githubPuller.fetchFiles",
-        "title": "GitHub: Fetch Selected Files to Workspace"
+        "title": "GitHub: Open Puller Config"
       },
       {
         "command": "githubPuller.setToken",
         "title": "GitHub: Set Token (Secret Storage)"
+      },
+      {
+        "command": "githubPuller.configureToken",
+        "title": "GitHub: Puller Configure Token"
+      },
+      {
+        "command": "githubPuller.runAutoSync",
+        "title": "GitHub: Run Puller Auto Sync"
       }
     ],
     "configuration": {
@@ -40,7 +50,7 @@
         "githubPuller.showStatusBar": {
           "type": "boolean",
           "default": true,
-          "description": "Show a status bar button to open the puller panel."
+          "description": "Show a status bar button to run Puller auto sync."
         },
         "githubPuller.defaultTargetDir": {
           "type": "string",
@@ -77,6 +87,21 @@
           "type": "string",
           "default": "main",
           "description": "Default branch or tag (ref)."
+        },
+        "githubPuller.syncRepoUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Repository URL used by Puller auto sync."
+        },
+        "githubPuller.syncRef": {
+          "type": "string",
+          "default": "main",
+          "description": "Branch/tag used by Puller auto sync."
+        },
+        "githubPuller.syncPaths": {
+          "type": "string",
+          "default": "instructions,scripts,skills",
+          "description": "Comma-separated repository files/folders to sync."
         },
         "githubPuller.token": {
           "type": "string",
