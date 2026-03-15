@@ -75,7 +75,7 @@
         },
         "githubPuller.baseUrl": {
           "type": "string",
-          "default": "https://github.com",
+          "default": "https://alm-github.com.hsbc/",
           "description": "Base URL for GitHub or GitHub Enterprise (e.g., https://github.example.com)."
         },
         "githubPuller.apiBaseUrl": {
@@ -90,7 +90,7 @@
         },
         "githubPuller.syncRepoUrl": {
           "type": "string",
-          "default": "",
+          "default": "https://github.com/SebastienDegodez/copilot-instructions",
           "description": "Repository URL used by Puller auto sync."
         },
         "githubPuller.syncRef": {

@@ -139,7 +139,7 @@ function activate(context) {
                     throw e;
                 }
             }
-            const baseUrl = getSetting('githubPuller.baseUrl', 'https://github.com') || 'https://github.com';
+            const baseUrl = getSetting('githubPuller.baseUrl', 'https://alm-github.com.hsbc/') || 'https://alm-github.com.hsbc/';
             const apiBase = (0, github_1.deriveApiBase)(baseUrl, getSetting('githubPuller.apiBaseUrl', '') || '');
             const repo = (0, github_1.parseRepoUrl)(repoUrl, ref);
             output.appendLine(`[sync] repo=${repo.owner}/${repo.repo} ref=${repo.ref}`);

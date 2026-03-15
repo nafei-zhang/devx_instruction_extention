@@ -4,6 +4,9 @@ import { getSecretToken } from '../secrets';
 import { appendTargetDir, parseTargetDirs, readTargetDirsFromConfig, serializeTargetDirs, writeTargetDirsToConfig } from '../utils/targetDirs';
 import { renderFetchPanelHtml } from './fetchPanelTemplate';
 
+const PUBLIC_BASE_URL = 'https://github.com';
+const ENTERPRISE_BASE_URL = 'https://alm-github.com.hsbc/';
+
 export class FetchPanel {
   private panel: vscode.WebviewPanel | null = null;
   private cfgWatcher: vscode.Disposable | null = null;
@@ -95,6 +98,9 @@ export class FetchPanel {
   private pushDefaults() {
     const cfg = this.getConfigWriter();
     const configured = readTargetDirsFromConfig(cfg);
+    const baseUrl = cfg.get<string>('githubPuller.baseUrl') || ENTERPRISE_BASE_URL;
+    const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '').toLowerCase();
+    const normalizedPublic = PUBLIC_BASE_URL.replace(/\/+$/, '').toLowerCase();
     this.post({
       type: 'defaults',
       defaultRepoUrl: cfg.get<string>('githubPuller.syncRepoUrl') || '',
@@ -102,7 +108,8 @@ export class FetchPanel {
       defaultSyncPaths: cfg.get<string>('githubPuller.syncPaths') || '',
       preserve: cfg.get<boolean>('githubPuller.preserveStructure') ?? true,
       conflict: cfg.get<string>('githubPuller.conflictResolution') || 'rename',
-      defaultTargetDirs: configured
+      defaultTargetDirs: configured,
+      defaultHostType: normalizedBaseUrl === normalizedPublic ? 'public' : 'enterprise'
     });
   }
 
@@ -143,11 +150,11 @@ export class FetchPanel {
           break;
         }
         case 'loadTree': {
-          const cfg = vscode.workspace.getConfiguration();
+          const cfg = this.getConfigWriter();
           const defaultRef = cfg.get<string>('githubPuller.defaultRef') || 'main';
           const info = parseRepoUrl(msg.repoUrl, msg.ref || defaultRef);
           const token = (await getSecretToken(this.ctx.secrets)) || (cfg.get<string>('githubPuller.token') || '');
-          const baseUrl = cfg.get<string>('githubPuller.baseUrl') || 'https://github.com';
+          const baseUrl = msg.hostType === 'enterprise' ? ENTERPRISE_BASE_URL : PUBLIC_BASE_URL;
           const apiBaseOverride = cfg.get<string>('githubPuller.apiBaseUrl') || '';
           const apiBase = deriveApiBase(baseUrl, apiBaseOverride);
           this.post({ type: 'loading', text: 'Loading file tree…' });
@@ -173,6 +180,7 @@ export class FetchPanel {
           await writableCfg.update('githubPuller.syncPaths', normalizedSelected.join(','));
           await writableCfg.update('githubPuller.preserveStructure', !!msg.preserve);
           await writableCfg.update('githubPuller.conflictResolution', msg.conflict || 'rename');
+          await writableCfg.update('githubPuller.baseUrl', msg.hostType === 'enterprise' ? ENTERPRISE_BASE_URL : PUBLIC_BASE_URL);
           const serialized = serializeTargetDirs(parsedTargetDirs.normalized);
           await writeTargetDirsToConfig(writableCfg, serialized);
           this.post({ type: 'configSaved' });
@@ -197,11 +205,11 @@ type WebviewInMessage =
   | { type: 'selectTargetDir'; currentValue?: string }
   | { type: 'syncTargetDirs'; value: string }
   | { type: 'setToken' }
-  | { type: 'loadTree'; repoUrl: string; ref?: string }
-  | { type: 'saveConfig'; repoUrl: string; ref?: string; targetDir: string; preserve: boolean; conflict: 'overwrite' | 'skip' | 'rename'; selected: string[] };
+  | { type: 'loadTree'; repoUrl: string; ref?: string; hostType: 'public' | 'enterprise' }
+  | { type: 'saveConfig'; repoUrl: string; ref?: string; targetDir: string; preserve: boolean; conflict: 'overwrite' | 'skip' | 'rename'; selected: string[]; hostType: 'public' | 'enterprise' };
 
 type WebviewOutMessage =
-  | { type: 'defaults'; defaultRepoUrl: string; defaultRef: string; defaultSyncPaths: string; preserve: boolean; conflict: string; defaultTargetDirs: string }
+  | { type: 'defaults'; defaultRepoUrl: string; defaultRef: string; defaultSyncPaths: string; preserve: boolean; conflict: string; defaultTargetDirs: string; defaultHostType: 'public' | 'enterprise' }
   | { type: 'loading'; text: string }
   | { type: 'treeLoaded'; files: string[] }
   | { type: 'targetDir'; path: string }

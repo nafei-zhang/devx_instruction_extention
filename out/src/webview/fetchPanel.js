@@ -39,6 +39,8 @@ const github_1 = require("../github");
 const secrets_1 = require("../secrets");
 const targetDirs_1 = require("../utils/targetDirs");
 const fetchPanelTemplate_1 = require("./fetchPanelTemplate");
+const PUBLIC_BASE_URL = 'https://github.com';
+const ENTERPRISE_BASE_URL = 'https://alm-github.com.hsbc/';
 class FetchPanel {
     constructor(ctx) {
         this.ctx = ctx;
@@ -130,6 +132,9 @@ class FetchPanel {
     pushDefaults() {
         const cfg = this.getConfigWriter();
         const configured = (0, targetDirs_1.readTargetDirsFromConfig)(cfg);
+        const baseUrl = cfg.get('githubPuller.baseUrl') || ENTERPRISE_BASE_URL;
+        const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '').toLowerCase();
+        const normalizedPublic = PUBLIC_BASE_URL.replace(/\/+$/, '').toLowerCase();
         this.post({
             type: 'defaults',
             defaultRepoUrl: cfg.get('githubPuller.syncRepoUrl') || '',
@@ -137,7 +142,8 @@ class FetchPanel {
             defaultSyncPaths: cfg.get('githubPuller.syncPaths') || '',
             preserve: cfg.get('githubPuller.preserveStructure') ?? true,
             conflict: cfg.get('githubPuller.conflictResolution') || 'rename',
-            defaultTargetDirs: configured
+            defaultTargetDirs: configured,
+            defaultHostType: normalizedBaseUrl === normalizedPublic ? 'public' : 'enterprise'
         });
     }
     async handleMessage(msg) {
@@ -178,11 +184,11 @@ class FetchPanel {
                     break;
                 }
                 case 'loadTree': {
-                    const cfg = vscode.workspace.getConfiguration();
+                    const cfg = this.getConfigWriter();
                     const defaultRef = cfg.get('githubPuller.defaultRef') || 'main';
                     const info = (0, github_1.parseRepoUrl)(msg.repoUrl, msg.ref || defaultRef);
                     const token = (await (0, secrets_1.getSecretToken)(this.ctx.secrets)) || (cfg.get('githubPuller.token') || '');
-                    const baseUrl = cfg.get('githubPuller.baseUrl') || 'https://github.com';
+                    const baseUrl = msg.hostType === 'enterprise' ? ENTERPRISE_BASE_URL : PUBLIC_BASE_URL;
                     const apiBaseOverride = cfg.get('githubPuller.apiBaseUrl') || '';
                     const apiBase = (0, github_1.deriveApiBase)(baseUrl, apiBaseOverride);
                     this.post({ type: 'loading', text: 'Loading file tree…' });
@@ -209,6 +215,7 @@ class FetchPanel {
                     await writableCfg.update('githubPuller.syncPaths', normalizedSelected.join(','));
                     await writableCfg.update('githubPuller.preserveStructure', !!msg.preserve);
                     await writableCfg.update('githubPuller.conflictResolution', msg.conflict || 'rename');
+                    await writableCfg.update('githubPuller.baseUrl', msg.hostType === 'enterprise' ? ENTERPRISE_BASE_URL : PUBLIC_BASE_URL);
                     const serialized = (0, targetDirs_1.serializeTargetDirs)(parsedTargetDirs.normalized);
                     await (0, targetDirs_1.writeTargetDirsToConfig)(writableCfg, serialized);
                     this.post({ type: 'configSaved' });

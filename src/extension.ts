@@ -102,7 +102,7 @@ export function activate(context: vscode.ExtensionContext) {
           throw e;
         }
       }
-      const baseUrl = getSetting<string>('githubPuller.baseUrl', 'https://github.com') || 'https://github.com';
+      const baseUrl = getSetting<string>('githubPuller.baseUrl', 'https://alm-github.com.hsbc/') || 'https://alm-github.com.hsbc/';
       const apiBase = deriveApiBase(baseUrl, getSetting<string>('githubPuller.apiBaseUrl', '') || '');
       const repo = parseRepoUrl(repoUrl, ref);
       output.appendLine(`[sync] repo=${repo.owner}/${repo.repo} ref=${repo.ref}`);
