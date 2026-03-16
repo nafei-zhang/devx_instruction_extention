@@ -111,8 +111,8 @@ function activate(context) {
         const workspaceRoots = (vscode.workspace.workspaceFolders || []).map(f => f.uri.fsPath);
         if (workspaceRoots.length === 0) {
             setSyncVisual(false, 'Open project first');
-            const action = await vscode.window.showWarningMessage('当前未检测到有效的项目环境，请先打开一个项目工程后再执行同步操作。', { modal: true }, '打开项目');
-            if (action === '打开项目') {
+            const action = await vscode.window.showWarningMessage('No valid project environment is detected. Please open a project folder or workspace before running sync.', { modal: true }, 'Open Project');
+            if (action === 'Open Project') {
                 await vscode.commands.executeCommand('vscode.openFolder');
             }
             return;
@@ -162,7 +162,7 @@ function activate(context) {
                 output.appendLine(`[sync] unmatched paths=${expanded.issues.map(i => i.value).join(',')}`);
             }
             const preserve = getSetting('githubPuller.preserveStructure', true) ?? true;
-            const conflict = getSetting('githubPuller.conflictResolution', 'rename') || 'rename';
+            const conflict = getSetting('githubPuller.conflictResolution', 'overwrite') || 'overwrite';
             let ok = 0;
             let fail = 0;
             await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Puller Sync', cancellable: false }, async (progress) => {

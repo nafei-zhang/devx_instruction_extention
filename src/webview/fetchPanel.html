@@ -103,7 +103,7 @@
         <label>Conflict Strategy
           <select id="conflict">
             <option value="rename">Rename</option>
-            <option value="overwrite">Overwrite</option>
+            <option value="overwrite" selected>Overwrite</option>
             <option value="skip">Skip</option>
           </select>
         </label>
@@ -355,7 +355,7 @@
         const synced = (msg.defaultSyncPaths || '').split(',').map(v => v.trim()).filter(Boolean);
         state.pendingSelected = new Set(synced);
         preserve.checked = !!msg.preserve;
-        conflict.value = msg.conflict || 'rename';
+        conflict.value = msg.conflict || 'overwrite';
         hostType.value = msg.defaultHostType || 'enterprise';
         if (typeof msg.defaultTargetDirs === 'string') targetDir.value = msg.defaultTargetDirs;
         if (!repoUrl.value) repoUrl.value = 'https://github.com/SebastienDegodez/copilot-instructions';

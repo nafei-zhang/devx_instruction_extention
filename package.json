@@ -65,7 +65,7 @@
         "githubPuller.conflictResolution": {
           "type": "string",
           "enum": ["overwrite", "skip", "rename"],
-          "default": "rename",
+          "default": "overwrite",
           "description": "File conflict strategy: overwrite, skip, or rename."
         },
         "githubPuller.preserveStructure": {

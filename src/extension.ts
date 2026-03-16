@@ -129,7 +129,7 @@ export function activate(context: vscode.ExtensionContext) {
         output.appendLine(`[sync] unmatched paths=${expanded.issues.map(i => i.value).join(',')}`);
       }
       const preserve = getSetting<boolean>('githubPuller.preserveStructure', true) ?? true;
-      const conflict: 'overwrite' | 'skip' | 'rename' = (getSetting<string>('githubPuller.conflictResolution', 'rename') as any) || 'rename';
+      const conflict: 'overwrite' | 'skip' | 'rename' = (getSetting<string>('githubPuller.conflictResolution', 'overwrite') as any) || 'overwrite';
       let ok = 0;
       let fail = 0;
       await vscode.window.withProgress(

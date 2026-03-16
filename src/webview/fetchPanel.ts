@@ -107,7 +107,7 @@ export class FetchPanel {
       defaultRef: cfg.get<string>('githubPuller.syncRef') || cfg.get<string>('githubPuller.defaultRef') || 'main',
       defaultSyncPaths: cfg.get<string>('githubPuller.syncPaths') || '',
       preserve: cfg.get<boolean>('githubPuller.preserveStructure') ?? true,
-      conflict: cfg.get<string>('githubPuller.conflictResolution') || 'rename',
+      conflict: cfg.get<string>('githubPuller.conflictResolution') || 'overwrite',
       defaultTargetDirs: configured,
       defaultHostType: normalizedBaseUrl === normalizedPublic ? 'public' : 'enterprise'
     });
@@ -179,7 +179,7 @@ export class FetchPanel {
           await writableCfg.update('githubPuller.syncRef', info.ref);
           await writableCfg.update('githubPuller.syncPaths', normalizedSelected.join(','));
           await writableCfg.update('githubPuller.preserveStructure', !!msg.preserve);
-          await writableCfg.update('githubPuller.conflictResolution', msg.conflict || 'rename');
+          await writableCfg.update('githubPuller.conflictResolution', msg.conflict || 'overwrite');
           await writableCfg.update('githubPuller.baseUrl', msg.hostType === 'enterprise' ? ENTERPRISE_BASE_URL : PUBLIC_BASE_URL);
           const serialized = serializeTargetDirs(parsedTargetDirs.normalized);
           await writeTargetDirsToConfig(writableCfg, serialized);
