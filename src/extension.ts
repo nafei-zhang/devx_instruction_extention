@@ -71,11 +71,23 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showWarningMessage(`Please complete Puller Config (${missing.join(', ')}) and click Save Config before syncing.`);
       return;
     }
+    const workspaceRoots = (vscode.workspace.workspaceFolders || []).map(f => f.uri.fsPath);
+    if (workspaceRoots.length === 0) {
+      setSyncVisual(false, 'Open project first');
+      const action = await vscode.window.showWarningMessage(
+        'No valid project environment is detected. Please open a project folder or workspace before running sync.',
+        { modal: true },
+        'Open Project'
+      );
+      if (action === 'Open Project') {
+        await vscode.commands.executeCommand('vscode.openFolder');
+      }
+      return;
+    }
 
     setSyncVisual(true, 'Sync in progress');
     try {
       const configuredTargets = splitTargetDirs(getSetting<string>('githubPuller.targetDirs', '') || getSetting<string>('githubPuller.defaultTargetDir', '') || '');
-      const workspaceRoots = (vscode.workspace.workspaceFolders || []).map(f => f.uri.fsPath);
       const targetResolution = resolveSyncTargets(configuredTargets, workspaceRoots);
       const targetRoots = targetResolution.targets;
       if (targetRoots.length === 0) {

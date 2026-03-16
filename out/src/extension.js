@@ -108,10 +108,18 @@ function activate(context) {
             vscode.window.showWarningMessage(`Please complete Puller Config (${missing.join(', ')}) and click Save Config before syncing.`);
             return;
         }
+        const workspaceRoots = (vscode.workspace.workspaceFolders || []).map(f => f.uri.fsPath);
+        if (workspaceRoots.length === 0) {
+            setSyncVisual(false, 'Open project first');
+            const action = await vscode.window.showWarningMessage('当前未检测到有效的项目环境，请先打开一个项目工程后再执行同步操作。', { modal: true }, '打开项目');
+            if (action === '打开项目') {
+                await vscode.commands.executeCommand('vscode.openFolder');
+            }
+            return;
+        }
         setSyncVisual(true, 'Sync in progress');
         try {
             const configuredTargets = (0, targetDirs_1.splitTargetDirs)(getSetting('githubPuller.targetDirs', '') || getSetting('githubPuller.defaultTargetDir', '') || '');
-            const workspaceRoots = (vscode.workspace.workspaceFolders || []).map(f => f.uri.fsPath);
             const targetResolution = (0, sync_1.resolveSyncTargets)(configuredTargets, workspaceRoots);
             const targetRoots = targetResolution.targets;
             if (targetRoots.length === 0) {
