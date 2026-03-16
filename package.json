@@ -100,7 +100,7 @@
         },
         "githubPuller.syncPaths": {
           "type": "string",
-          "default": "instructions,scripts,skills",
+          "default": "docs,instructions,scripts,skills",
           "description": "Comma-separated repository files/folders to sync."
         },
         "githubPuller.token": {
