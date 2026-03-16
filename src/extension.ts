@@ -56,16 +56,22 @@ export function activate(context: vscode.ExtensionContext) {
     const repoUrl = (getSetting<string>('githubPuller.syncRepoUrl', '') || '').trim();
     const ref = (getSetting<string>('githubPuller.syncRef', getSetting<string>('githubPuller.defaultRef', 'main') || 'main') || 'main').trim();
     const paths = splitSyncPaths(getSetting<string>('githubPuller.syncPaths', '') || '');
-    const token = pickToken(await getSecretToken(context.secrets), getSetting<string>('githubPuller.token', '') || '');
+    let token = pickToken(await getSecretToken(context.secrets), getSetting<string>('githubPuller.token', '') || '');
 
-    if (!token || !repoUrl || paths.length === 0) {
+    if (!token) {
+      await vscode.commands.executeCommand('githubPuller.setToken');
+      token = pickToken(await getSecretToken(context.secrets), getSetting<string>('githubPuller.token', '') || '');
+      if (!token) {
+        setSyncVisual(false, 'Configure Puller Sync');
+        vscode.window.showWarningMessage('Token is required before syncing. Please set token and try again.');
+        return;
+      }
+    }
+
+    if (!repoUrl || paths.length === 0) {
       setSyncVisual(false, 'Configure Puller Sync');
       openConfigPanel();
-      if (!token) {
-        await vscode.commands.executeCommand('githubPuller.setToken');
-      }
       const missing: string[] = [];
-      if (!token) missing.push('token');
       if (!repoUrl) missing.push('repository');
       if (paths.length === 0) missing.push('sync paths');
       vscode.window.showWarningMessage(`Please complete Puller Config (${missing.join(', ')}) and click Save Config before syncing.`);
@@ -160,7 +166,13 @@ export function activate(context: vscode.ExtensionContext) {
           }
         }
       );
-      vscode.window.showInformationMessage(`Puller Sync complete: ${ok} succeeded, ${fail} failed.`);
+      if (fail === 0) {
+        vscode.window.showInformationMessage(`Puller Sync succeeded: ${ok} succeeded, ${fail} failed.`);
+      } else if (ok === 0) {
+        vscode.window.showErrorMessage(`Puller Sync failed: ${ok} succeeded, ${fail} failed.`);
+      } else {
+        vscode.window.showWarningMessage(`Puller Sync partially succeeded: ${ok} succeeded, ${fail} failed.`);
+      }
       setSyncVisual(false, `Last sync: ${ok} ok, ${fail} failed`);
     } catch (e: any) {
       const message = e?.message || String(e);

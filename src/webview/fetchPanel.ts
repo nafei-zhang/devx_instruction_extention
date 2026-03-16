@@ -83,10 +83,10 @@ export class FetchPanel {
       this.cfgWatcher = null;
     });
     this.panel.webview.onDidReceiveMessage((msg: WebviewInMessage) => this.handleMessage(msg));
-    this.pushDefaults();
+    void this.pushDefaults();
     this.cfgWatcher = vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration('githubPuller.targetDirs') || e.affectsConfiguration('githubPuller.defaultTargetDir')) {
-        this.pushDefaults();
+        void this.pushDefaults();
       }
     });
   }
@@ -95,12 +95,13 @@ export class FetchPanel {
     this.panel?.webview.postMessage(message);
   }
 
-  private pushDefaults() {
+  private async pushDefaults() {
     const cfg = this.getConfigWriter();
     const configured = readTargetDirsFromConfig(cfg);
     const baseUrl = cfg.get<string>('githubPuller.baseUrl') || ENTERPRISE_BASE_URL;
     const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '').toLowerCase();
     const normalizedPublic = PUBLIC_BASE_URL.replace(/\/+$/, '').toLowerCase();
+    const tokenSet = !!(((await getSecretToken(this.ctx.secrets)) || (cfg.get<string>('githubPuller.token') || '')).trim());
     this.post({
       type: 'defaults',
       defaultRepoUrl: cfg.get<string>('githubPuller.syncRepoUrl') || '',
@@ -109,7 +110,8 @@ export class FetchPanel {
       preserve: cfg.get<boolean>('githubPuller.preserveStructure') ?? true,
       conflict: cfg.get<string>('githubPuller.conflictResolution') || 'overwrite',
       defaultTargetDirs: configured,
-      defaultHostType: normalizedBaseUrl === normalizedPublic ? 'public' : 'enterprise'
+      defaultHostType: normalizedBaseUrl === normalizedPublic ? 'public' : 'enterprise',
+      tokenSet
     });
   }
 
@@ -189,6 +191,7 @@ export class FetchPanel {
         }
         case 'setToken': {
           await vscode.commands.executeCommand('githubPuller.setToken');
+          await this.pushDefaults();
           break;
         }
       }
@@ -209,7 +212,7 @@ type WebviewInMessage =
   | { type: 'saveConfig'; repoUrl: string; ref?: string; targetDir: string; preserve: boolean; conflict: 'overwrite' | 'skip' | 'rename'; selected: string[]; hostType: 'public' | 'enterprise' };
 
 type WebviewOutMessage =
-  | { type: 'defaults'; defaultRepoUrl: string; defaultRef: string; defaultSyncPaths: string; preserve: boolean; conflict: string; defaultTargetDirs: string; defaultHostType: 'public' | 'enterprise' }
+  | { type: 'defaults'; defaultRepoUrl: string; defaultRef: string; defaultSyncPaths: string; preserve: boolean; conflict: string; defaultTargetDirs: string; defaultHostType: 'public' | 'enterprise'; tokenSet: boolean }
   | { type: 'loading'; text: string }
   | { type: 'treeLoaded'; files: string[] }
   | { type: 'targetDir'; path: string }

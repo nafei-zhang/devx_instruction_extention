@@ -18,6 +18,8 @@
     .row { display: grid; grid-template-columns: 1fr; gap: var(--sp); }
     .row-inline { display: grid; grid-template-columns: 1fr auto; gap: var(--sp); align-items: end; }
     .toolbar { display: flex; gap: 8px; align-items: center; }
+    .token-indicator { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; margin: 0; }
+    .token-indicator input { margin: 0; }
     .btn { display: inline-flex; align-items: center; justify-content: center; padding: 0 12px; height: 28px; line-height: 28px; border: 1px solid var(--vscode-button-border, transparent); background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-radius: var(--radius); cursor: pointer; }
     .btn:disabled { opacity: .6; cursor: default; }
     .btn-secondary { background: var(--vscode-editorWidget-background); color: var(--vscode-foreground); border-color: var(--vscode-panel-border); }
@@ -55,7 +57,10 @@
   <div class="card">
     <div class="header">
       <div class="title">Puller Config</div>
-      <button class="btn btn-secondary" id="setToken">Token</button>
+      <div class="toolbar">
+        <label class="token-indicator"><input id="tokenReady" type="checkbox" disabled> Token Set</label>
+        <button class="btn btn-secondary" id="setToken">Token</button>
+      </div>
     </div>
     <div class="container">
       <div class="row">
@@ -64,7 +69,7 @@
           <input id="repoUrl" type="text" placeholder="owner/repo or https://host/owner/repo">
         </div>
       </div>
-      <div class="row">
+      <div class="row" style="display:none;">
         <div>
           <label>Registry Type</label>
           <select id="hostType">
@@ -110,7 +115,7 @@
       </div>
       <div class="footer">
         <div class="status" id="status"></div>
-        <button class="btn" id="fetch" disabled>Save Config</button>
+        <button class="btn" id="fetch" disabled>Save</button>
       </div>
     </div>
   </div>
@@ -132,6 +137,7 @@
     const loadTree = document.getElementById('loadTree');
     const pickDir = document.getElementById('pickDir');
     const setTokenBtn = document.getElementById('setToken');
+    const tokenReady = document.getElementById('tokenReady');
     const fetchBtn = document.getElementById('fetch');
     const status = document.getElementById('status');
 
@@ -357,6 +363,7 @@
         preserve.checked = !!msg.preserve;
         conflict.value = msg.conflict || 'overwrite';
         hostType.value = msg.defaultHostType || 'enterprise';
+        tokenReady.checked = !!msg.tokenSet;
         if (typeof msg.defaultTargetDirs === 'string') targetDir.value = msg.defaultTargetDirs;
         if (!repoUrl.value) repoUrl.value = 'https://github.com/SebastienDegodez/copilot-instructions';
         updateActions();

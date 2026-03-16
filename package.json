@@ -28,19 +28,19 @@
     "commands": [
       {
         "command": "githubPuller.fetchFiles",
-        "title": "GitHub: Open Puller Config"
+        "title": "Bridge: Open Puller Config"
       },
       {
         "command": "githubPuller.setToken",
-        "title": "GitHub: Set Token (Secret Storage)"
+        "title": "Bridge: Set Token"
       },
       {
         "command": "githubPuller.configureToken",
-        "title": "GitHub: Puller Configure Token"
+        "title": "Bridge: Puller Configure Token"
       },
       {
         "command": "githubPuller.runAutoSync",
-        "title": "GitHub: Run Puller Auto Sync"
+        "title": "Bridge: Run Puller Auto Sync"
       }
     ],
     "configuration": {

@@ -91,16 +91,20 @@ function activate(context) {
         const repoUrl = (getSetting('githubPuller.syncRepoUrl', '') || '').trim();
         const ref = (getSetting('githubPuller.syncRef', getSetting('githubPuller.defaultRef', 'main') || 'main') || 'main').trim();
         const paths = (0, sync_1.splitSyncPaths)(getSetting('githubPuller.syncPaths', '') || '');
-        const token = (0, sync_1.pickToken)(await (0, secrets_1.getSecretToken)(context.secrets), getSetting('githubPuller.token', '') || '');
-        if (!token || !repoUrl || paths.length === 0) {
+        let token = (0, sync_1.pickToken)(await (0, secrets_1.getSecretToken)(context.secrets), getSetting('githubPuller.token', '') || '');
+        if (!token) {
+            await vscode.commands.executeCommand('githubPuller.setToken');
+            token = (0, sync_1.pickToken)(await (0, secrets_1.getSecretToken)(context.secrets), getSetting('githubPuller.token', '') || '');
+            if (!token) {
+                setSyncVisual(false, 'Configure Puller Sync');
+                vscode.window.showWarningMessage('Token is required before syncing. Please set token and try again.');
+                return;
+            }
+        }
+        if (!repoUrl || paths.length === 0) {
             setSyncVisual(false, 'Configure Puller Sync');
             openConfigPanel();
-            if (!token) {
-                await vscode.commands.executeCommand('githubPuller.setToken');
-            }
             const missing = [];
-            if (!token)
-                missing.push('token');
             if (!repoUrl)
                 missing.push('repository');
             if (paths.length === 0)

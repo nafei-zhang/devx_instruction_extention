@@ -2,163 +2,105 @@
 
 English | [简体中文](./README.zh-CN.md)
 
-Pull only the files you need from GitHub or GitHub Enterprise into a specific folder in your workspace. The extension preserves folder structure, handles conflicts, detects encodings, and provides a collapsible tree for file selection with progress and error reporting.
+Pull selected files from GitHub/GitHub Enterprise into local target folders without cloning the full repository.
 
-## Features
+## What’s Current
 
-- Fetch selected files without cloning the entire repository
-- Works with GitHub and GitHub Enterprise (configurable baseUrl / apiBaseUrl)
-- Private repositories supported via token auth (securely stored in VS Code Secret Storage; public repos can be used without a token)
-- Collapsible tree selector: select by folder, Select All/None, Expand/Collapse All, and path filter
-- Preserve remote folder structure on write
-- Conflict strategies: rename / overwrite / skip
-- Encoding detection and transcoding via chardet + iconv-lite
-- Progress and result summary notifications
-- Status bar entry to quickly open the panel
+- Config panel now uses **Save** (instead of Save Config)
+- **Registry Type** field is currently hidden in the panel
+- Token status is visible with a checkbox near the **Token** button
+- Auto sync checks token first; if missing, it opens the token input immediately
+- If no project/workspace is open, sync shows a modal prompt to open a project
+- Default conflict strategy is **overwrite**
+- Default preserve structure is **true**
+- Default base URL is `https://alm-github.com.hsbc/`
+
+## Commands
+
+- Bridge: Open Puller Config
+- Bridge: Set Token
+- Bridge: Puller Configure Token
+- Bridge: Run Puller Auto Sync
 
 ## Quick Start
 
-1. Install and build
+1. Install and compile
 
 ```bash
 npm install
 npm run compile
 ```
 
-2. Launch the Extension Development Host  
-Press F5 in VS Code (Run Extension). A new window opens with the extension available.
+2. Press F5 to launch Extension Development Host
+3. Open command palette and run **Bridge: Open Puller Config**
+4. Configure repository/ref/paths, then click **Save**
+5. Run **Bridge: Run Puller Auto Sync**
 
-3. Open the puller panel  
-Run the command:
-
-- GitHub: Fetch Selected Files to Workspace  
-- Or click the “GitHub Puller” item in the status bar
-
-## Usage
+## Config Panel Flow
 
 1) Repository input
-- Supported formats:
-  - owner/repo
-  - https://host/owner/repo
-  - Optional `#ref` fragment (or use the “Branch/Tag (ref)” field), defaults to `main`
+- Supports `owner/repo` or full URL `https://host/owner/repo`
+- `#ref` is supported, or fill `Branch/Tag (ref)`
 
-2) Load file tree  
-Click “Load Tree” to fetch and display the repository file tree (only files are selectable).
+2) Load and select files
+- Click **Load Tree**
+- Select files/folders from the tree
+- Use filter, Select All/None, Expand/Collapse
 
-3) Select files
-- Check files; checking a folder selects all descendant files (indeterminate state supported)
-- Toolbar:
-  - Filter file paths (prefix/contains)
-  - Select All / Select None
-  - Expand All / Collapse All
+3) Target and strategy
+- `Target Directory` is optional and supports comma-separated absolute paths
+- `Preserve structure` default is checked
+- `Conflict Strategy` default is `Overwrite`
 
-4) Target and options
-- Target Directory: choose or type an absolute path (can be inside your workspace)
-- Preserve structure: keep repository folder structure
-- Conflict Strategy: rename / overwrite / skip
+4) Save config
+- Click **Save** to persist sync settings
 
-5) Fetch  
-Click “Fetch”. A progress notification appears. When finished, a success/failure summary is shown and the panel status updates.
+## Sync Preconditions
 
-## Authentication & Token (Optional)
+When running auto sync:
 
-- When you don’t need a token
-  - Public repositories work without a token, suitable for low-frequency usage
-  - Small/occasional operations that do not hit GitHub’s unauthenticated rate limit (~60 req/hour)
+1. Token is checked first  
+   - If missing, token input opens immediately
+2. Required sync fields are validated  
+   - repo URL and sync paths
+3. Workspace/project is validated  
+   - if not open, a modal prompts: **Open Project**
 
-- When a token is recommended/required
-  - Private or organization repositories
-  - Higher-frequency usage (authenticated rate limits are much higher)
-  - GitHub Enterprise environments often require a token (depends on admin policy)
+## Token
 
-- How to set a token
-  - Run the command: GitHub: Set Token (Secret Storage)
-  - Paste a token with read access to repo; saving an empty value clears the token
-  - The token is stored in VS Code Secret Storage and is never written to disk
+- Preferred storage: VS Code Secret Storage
+- Fallback: `githubPuller.token` in settings
+- In panel header, the Token Set checkbox reflects whether token is currently available
 
-## GitHub Enterprise
-
-Set in VS Code settings:
-
-```json
-{
-  "githubPuller.baseUrl": "https://github.example.com",
-  "githubPuller.apiBaseUrl": "" // Optional; defaults to baseUrl + /api/v3
-}
-```
-
-Rules:
-- If baseUrl is https://github.com → use https://api.github.com
-- If baseUrl is a GHES domain → default to `${baseUrl}/api/v3`
-- If your GHES API path differs, set `githubPuller.apiBaseUrl` explicitly
-
-## VS Code Settings
-
-Search “GitHub File Puller” in Settings or set via settings.json:
+## VS Code Settings (Current Defaults)
 
 ```json
 {
   "githubPuller.showStatusBar": true,
   "githubPuller.defaultTargetDir": "",
-  "githubPuller.conflictResolution": "rename",   // overwrite | skip | rename
+  "githubPuller.targetDirs": "",
+  "githubPuller.conflictResolution": "overwrite",
   "githubPuller.preserveStructure": true,
-  "githubPuller.baseUrl": "https://github.com",
+  "githubPuller.baseUrl": "https://alm-github.com.hsbc/",
   "githubPuller.apiBaseUrl": "",
   "githubPuller.defaultRef": "main",
+  "githubPuller.syncRepoUrl": "https://github.com/SebastienDegodez/copilot-instructions",
+  "githubPuller.syncRef": "main",
+  "githubPuller.syncPaths": "instructions,scripts,skills",
   "githubPuller.token": ""
 }
 ```
 
-## Commands
+## Enterprise API Behavior
 
-- GitHub: Fetch Selected Files to Workspace (open the panel)
--
-- GitHub: Set Token (Secret Storage) (set/clear token)
+- `baseUrl = https://github.com` → API defaults to `https://api.github.com`
+- Other hosts → API defaults to `${baseUrl}/api/v3`
+- You can override via `githubPuller.apiBaseUrl`
 
-## Conflict Strategy
-
-- rename: if destination exists, auto-rename (append an index) and write
-- overwrite: overwrite the existing file
-- skip: skip writing and report in results
-
-## Troubleshooting
-
-- 401 Unauthorized  
-  - Invalid token or insufficient permission; ensure `repo` read access  
-  - On GHES, verify baseUrl/apiBaseUrl configuration
-- 404 Not Found / invalid ref  
-  - Branch/tag not found; check your ref  
-  - URL format incorrect (must be owner/repo or a full URL)
-- Rate limit / access restricted  
-  - Configure and use a token  
-  - Ensure connectivity to GHES API
-- Garbled text  
-  - The extension detects common encodings; if issues persist, verify the source file encoding locally
-
-## Known Limitations
-
-- Very large repositories may have slow tree retrieval (recursive API size)
-- Git LFS pointers are not resolved; content is downloaded as-is
-- Symlinks and other special file types are treated as regular files
-
-## Development & Debugging
-
-Key files:
-
-- Entry/commands: src/extension.ts  
-- Webview and tree UI: src/webview/fetchPanel.ts  
-- GitHub API calls: src/github.ts  
-- File writing & encoding: src/utils/fs.ts
-
-Scripts:
+## Development
 
 ```bash
 npm run compile
 npm run typecheck
-# Press F5 to run the Extension Development Host
+npm test
 ```
-
-## Security & Privacy
-
-- Token is stored in VS Code Secret Storage; never written to files or logs  
-- Avoid placing tokens in settings.json unless for temporary testing

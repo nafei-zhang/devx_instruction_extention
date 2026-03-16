@@ -119,22 +119,23 @@ class FetchPanel {
             this.cfgWatcher = null;
         });
         this.panel.webview.onDidReceiveMessage((msg) => this.handleMessage(msg));
-        this.pushDefaults();
+        void this.pushDefaults();
         this.cfgWatcher = vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('githubPuller.targetDirs') || e.affectsConfiguration('githubPuller.defaultTargetDir')) {
-                this.pushDefaults();
+                void this.pushDefaults();
             }
         });
     }
     post(message) {
         this.panel?.webview.postMessage(message);
     }
-    pushDefaults() {
+    async pushDefaults() {
         const cfg = this.getConfigWriter();
         const configured = (0, targetDirs_1.readTargetDirsFromConfig)(cfg);
         const baseUrl = cfg.get('githubPuller.baseUrl') || ENTERPRISE_BASE_URL;
         const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '').toLowerCase();
         const normalizedPublic = PUBLIC_BASE_URL.replace(/\/+$/, '').toLowerCase();
+        const tokenSet = !!(((await (0, secrets_1.getSecretToken)(this.ctx.secrets)) || (cfg.get('githubPuller.token') || '')).trim());
         this.post({
             type: 'defaults',
             defaultRepoUrl: cfg.get('githubPuller.syncRepoUrl') || '',
@@ -143,7 +144,8 @@ class FetchPanel {
             preserve: cfg.get('githubPuller.preserveStructure') ?? true,
             conflict: cfg.get('githubPuller.conflictResolution') || 'overwrite',
             defaultTargetDirs: configured,
-            defaultHostType: normalizedBaseUrl === normalizedPublic ? 'public' : 'enterprise'
+            defaultHostType: normalizedBaseUrl === normalizedPublic ? 'public' : 'enterprise',
+            tokenSet
         });
     }
     async handleMessage(msg) {
@@ -224,6 +226,7 @@ class FetchPanel {
                 }
                 case 'setToken': {
                     await vscode.commands.executeCommand('githubPuller.setToken');
+                    await this.pushDefaults();
                     break;
                 }
             }
