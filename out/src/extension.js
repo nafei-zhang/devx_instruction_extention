@@ -101,14 +101,12 @@ function activate(context) {
                 return;
             }
         }
-        if (!repoUrl || paths.length === 0) {
+        if (!repoUrl) {
             setSyncVisual(false, 'Configure Puller Sync');
             openConfigPanel();
             const missing = [];
             if (!repoUrl)
                 missing.push('repository');
-            if (paths.length === 0)
-                missing.push('sync paths');
             vscode.window.showWarningMessage(`Please complete Puller Config (${missing.join(', ')}) and click Save Config before syncing.`);
             return;
         }
@@ -158,10 +156,16 @@ function activate(context) {
             output.appendLine(`[sync] targetRoots=${targetRoots.join(',')}`);
             const tree = await (0, github_1.fetchRepoTreeWithApi)(repo, token || undefined, apiBase);
             const allFiles = tree.filter(t => t.type === 'blob').map(t => t.path);
-            const expanded = (0, sync_1.expandSelectedRepoPaths)(allFiles, paths);
+            const expanded = paths.length === 0
+                ? { files: allFiles, issues: [] }
+                : (0, sync_1.expandSelectedRepoPaths)(allFiles, paths);
             if (expanded.files.length === 0) {
+                if (paths.length === 0)
+                    throw new Error('No files found in repository tree');
                 throw new Error(`No files matched by sync paths: ${paths.join(', ')}`);
             }
+            if (paths.length === 0)
+                output.appendLine('[sync] sync paths not configured, syncing all repository files');
             if (expanded.issues.length > 0) {
                 output.appendLine(`[sync] unmatched paths=${expanded.issues.map(i => i.value).join(',')}`);
             }
@@ -196,7 +200,15 @@ function activate(context) {
                     }
                 }
             });
-            vscode.window.showInformationMessage(`Puller Sync complete: ${ok} succeeded, ${fail} failed.`);
+            if (fail === 0) {
+                vscode.window.showInformationMessage(`Puller Sync succeeded: ${ok} succeeded, ${fail} failed.`);
+            }
+            else if (ok === 0) {
+                vscode.window.showErrorMessage(`Puller Sync failed: ${ok} succeeded, ${fail} failed.`);
+            }
+            else {
+                vscode.window.showWarningMessage(`Puller Sync partially succeeded: ${ok} succeeded, ${fail} failed.`);
+            }
             setSyncVisual(false, `Last sync: ${ok} ok, ${fail} failed`);
         }
         catch (e) {

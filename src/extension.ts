@@ -68,12 +68,11 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }
 
-    if (!repoUrl || paths.length === 0) {
+    if (!repoUrl) {
       setSyncVisual(false, 'Configure Puller Sync');
       openConfigPanel();
       const missing: string[] = [];
       if (!repoUrl) missing.push('repository');
-      if (paths.length === 0) missing.push('sync paths');
       vscode.window.showWarningMessage(`Please complete Puller Config (${missing.join(', ')}) and click Save Config before syncing.`);
       return;
     }
@@ -127,10 +126,14 @@ export function activate(context: vscode.ExtensionContext) {
       output.appendLine(`[sync] targetRoots=${targetRoots.join(',')}`);
       const tree = await fetchRepoTreeWithApi(repo, token || undefined, apiBase);
       const allFiles = tree.filter(t => t.type === 'blob').map(t => t.path);
-      const expanded = expandSelectedRepoPaths(allFiles, paths);
+      const expanded = paths.length === 0
+        ? { files: allFiles, issues: [] as Array<{ value: string; reason: string }> }
+        : expandSelectedRepoPaths(allFiles, paths);
       if (expanded.files.length === 0) {
+        if (paths.length === 0) throw new Error('No files found in repository tree');
         throw new Error(`No files matched by sync paths: ${paths.join(', ')}`);
       }
+      if (paths.length === 0) output.appendLine('[sync] sync paths not configured, syncing all repository files');
       if (expanded.issues.length > 0) {
         output.appendLine(`[sync] unmatched paths=${expanded.issues.map(i => i.value).join(',')}`);
       }
